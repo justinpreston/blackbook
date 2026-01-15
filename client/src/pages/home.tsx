@@ -3,29 +3,43 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { StatsGrid } from "@/components/stats-grid";
 import { FeedFilters } from "@/components/feed-filters";
-import { TradeFeed } from "@/components/trade-feed";
+import { CompactTradeCard } from "@/components/compact-trade-card";
 import { NewTradeForm } from "@/components/new-trade-form";
 import { CommentDialog } from "@/components/comment-dialog";
 import { Confetti } from "@/components/confetti";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type Trade, type User, type UserStats, type Comment, type FeedFilter, type InsertTrade } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { Home as HomeIcon, User as UserIcon } from "lucide-react";
 
 export default function Home() {
   const { toast } = useToast();
   const [showNewTradeForm, setShowNewTradeForm] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FeedFilter>("all");
+  const [activeTab, setActiveTab] = useState<"home" | "my-trades">("home");
+  const [homeFilter, setHomeFilter] = useState<FeedFilter>("all");
+  const [myFilter, setMyFilter] = useState<FeedFilter>("all");
   const [commentTradeId, setCommentTradeId] = useState<string | null>(null);
 
   const { data: currentUser } = useQuery<User>({
     queryKey: ["/api/users/me"],
   });
 
-  const { data: trades = [], isLoading: tradesLoading } = useQuery<Trade[]>({
-    queryKey: ["/api/trades", activeFilter],
+  const { data: sharedTrades = [], isLoading: sharedLoading } = useQuery<Trade[]>({
+    queryKey: ["/api/trades/shared", homeFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/trades?filter=${activeFilter}`);
+      const res = await fetch(`/api/trades/shared?filter=${homeFilter}`);
+      if (!res.ok) throw new Error("Failed to fetch trades");
+      return res.json();
+    },
+  });
+
+  const { data: myTrades = [], isLoading: myTradesLoading } = useQuery<Trade[]>({
+    queryKey: ["/api/trades/mine", myFilter],
+    queryFn: async () => {
+      const res = await fetch(`/api/trades/mine?filter=${myFilter}`);
       if (!res.ok) throw new Error("Failed to fetch trades");
       return res.json();
     },
@@ -58,12 +72,13 @@ export default function Home() {
       return result.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/trades"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/shared"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/mine"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       setShowConfetti(true);
       toast({
         title: "Trade posted!",
-        description: "Your trade has been shared with the team.",
+        description: "Your trade has been added to your journal.",
       });
     },
     onError: (error: Error) => {
@@ -80,7 +95,32 @@ export default function Home() {
       await apiRequest("POST", `/api/trades/${tradeId}/like`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/trades"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/shared"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/mine"] });
+    },
+  });
+
+  const shareMutation = useMutation({
+    mutationFn: async (tradeId: string) => {
+      const result = await apiRequest("POST", `/api/trades/${tradeId}/share`);
+      return result.json();
+    },
+    onSuccess: (data, tradeId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/shared"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/mine"] });
+      toast({
+        title: data.shared ? "Trade shared!" : "Trade unshared",
+        description: data.shared 
+          ? "Your trade is now visible to everyone." 
+          : "Your trade is now private.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update share status",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -90,7 +130,8 @@ export default function Home() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/trades", variables.tradeId, "comments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/trades"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/shared"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/mine"] });
     },
     onError: (error: Error) => {
       toast({
@@ -109,6 +150,10 @@ export default function Home() {
     setCommentTradeId(tradeId);
   }, []);
 
+  const handleShare = useCallback((tradeId: string) => {
+    shareMutation.mutate(tradeId);
+  }, [shareMutation]);
+
   const handleSubmitComment = async (tradeId: string, content: string) => {
     await commentMutation.mutateAsync({ tradeId, content });
   };
@@ -117,7 +162,8 @@ export default function Home() {
     setShowConfetti(false);
   }, []);
 
-  const selectedTrade = commentTradeId ? trades.find((t) => t.id === commentTradeId) || null : null;
+  const allTrades = [...sharedTrades, ...myTrades];
+  const selectedTrade = commentTradeId ? allTrades.find((t) => t.id === commentTradeId) || null : null;
 
   const defaultStats: UserStats = {
     totalTrades: 0,
@@ -136,33 +182,95 @@ export default function Home() {
     avatarUrl: undefined,
   };
 
+  const renderTradeGrid = (trades: Trade[], isLoading: boolean, showShareToggle: boolean) => {
+    if (isLoading) {
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 rounded-lg" />
+          ))}
+        </div>
+      );
+    }
+
+    if (trades.length === 0) {
+      return (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="text-lg">No trades found</p>
+          <p className="text-sm mt-1">
+            {showShareToggle 
+              ? "Create a new trade to get started!" 
+              : "No one has shared any trades yet."}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {trades.map((trade) => (
+          <CompactTradeCard
+            key={trade.id}
+            trade={trade}
+            user={usersMap.get(trade.userId) || defaultUser}
+            currentUserId={currentUser?.id || "guest"}
+            onLike={handleLike}
+            onComment={handleComment}
+            onShare={handleShare}
+            showShareToggle={showShareToggle}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Confetti show={showConfetti} onComplete={handleConfettiComplete} />
       
       <Header onNewTrade={() => setShowNewTradeForm(true)} />
 
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
-        <section className="mb-8" aria-label="Performance Statistics">
-          <h2 className="text-lg font-semibold mb-4">Performance Dashboard</h2>
-          <StatsGrid stats={stats || defaultStats} isLoading={statsLoading} />
-        </section>
+      <main className="container mx-auto px-4 py-6 max-w-7xl">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "home" | "my-trades")}>
+          <TabsList className="mb-6" data-testid="tabs-navigation">
+            <TabsTrigger value="home" className="gap-2" data-testid="tab-home">
+              <HomeIcon className="h-4 w-4" />
+              Home
+            </TabsTrigger>
+            <TabsTrigger value="my-trades" className="gap-2" data-testid="tab-my-trades">
+              <UserIcon className="h-4 w-4" />
+              My Trades
+            </TabsTrigger>
+          </TabsList>
 
-        <section aria-label="Trade Feed">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <h2 className="text-lg font-semibold">Recent Trades</h2>
-            <FeedFilters activeFilter={activeFilter} onFilterChange={setActiveFilter} />
-          </div>
+          <TabsContent value="home" className="mt-0">
+            <section className="mb-6" aria-label="Performance Statistics">
+              <h2 className="text-lg font-semibold mb-4">Team Performance</h2>
+              <StatsGrid stats={stats || defaultStats} isLoading={statsLoading} />
+            </section>
 
-          <TradeFeed
-            trades={trades}
-            users={usersMap}
-            currentUserId={currentUser?.id || "guest"}
-            isLoading={tradesLoading}
-            onLike={handleLike}
-            onComment={handleComment}
-          />
-        </section>
+            <section aria-label="Shared Trade Feed">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <h2 className="text-lg font-semibold">Shared Trades</h2>
+                <FeedFilters activeFilter={homeFilter} onFilterChange={setHomeFilter} />
+              </div>
+              {renderTradeGrid(sharedTrades, sharedLoading, false)}
+            </section>
+          </TabsContent>
+
+          <TabsContent value="my-trades" className="mt-0">
+            <section aria-label="My Trades">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold">My Trades</h2>
+                  <p className="text-sm text-muted-foreground">Toggle the share switch to show trades on the home feed</p>
+                </div>
+                <FeedFilters activeFilter={myFilter} onFilterChange={setMyFilter} />
+              </div>
+              {renderTradeGrid(myTrades, myTradesLoading, true)}
+            </section>
+          </TabsContent>
+        </Tabs>
       </main>
 
       <NewTradeForm

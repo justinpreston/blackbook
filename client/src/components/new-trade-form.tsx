@@ -39,6 +39,7 @@ const formSchema = insertTradeSchema.omit({ userId: true }).extend({
   quantity: z.coerce.number().int().positive("Quantity must be at least 1"),
   maxProfit: z.coerce.number().optional().or(z.literal("")),
   maxLoss: z.coerce.number().optional().or(z.literal("")),
+  shared: z.boolean().default(false),
   legs: z.array(tradeLegSchema.extend({
     strike: z.coerce.number().optional().or(z.literal("")),
     premium: z.coerce.number().optional().or(z.literal("")),
@@ -71,7 +72,7 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
       ticker: "",
       strategy: "LONG_CALL",
       status: "OPEN",
-      entryPrice: 0,
+      entryPrice: "" as any,
       exitPrice: "",
       quantity: 1,
       entryDate: new Date().toISOString().split("T")[0],
@@ -79,6 +80,7 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
       notes: "",
       maxProfit: "",
       maxLoss: "",
+      shared: false,
       legs: [{ type: "CALL", action: "BUY", quantity: 1, strike: "", expiration: "", premium: "" }],
     },
   });
@@ -116,6 +118,7 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
       quantity: Number(values.quantity),
       maxProfit: values.maxProfit === "" || values.maxProfit === undefined ? null : Number(values.maxProfit),
       maxLoss: values.maxLoss === "" || values.maxLoss === undefined ? null : Number(values.maxLoss),
+      shared: false,
       legs: values.legs.map(leg => ({
         ...leg,
         quantity: Number(leg.quantity),
@@ -123,9 +126,13 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
         premium: leg.premium === "" || leg.premium === undefined ? null : Number(leg.premium),
       })),
     };
-    await onSubmit(cleanedData as any);
-    form.reset();
-    onOpenChange(false);
+    try {
+      await onSubmit(cleanedData as any);
+      form.reset();
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Trade submission error:", error);
+    }
   };
 
   return (
