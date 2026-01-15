@@ -30,6 +30,16 @@ The frontend follows a component-based architecture with:
 - **Trade Sharing**: Trades default to private; users toggle sharing via switches on My Trades tab
 - **Compact Grid Layout**: Trades display in responsive grid with 2-4 columns based on screen size
 - **Social Features**: Like and comment on shared trades
+- **Live Pricing**: Alpha Vantage integration for real-time stock prices on open trades
+
+### Alpha Vantage Integration
+- **Service**: `server/alpha-vantage.ts` handles API calls with 5-minute caching
+- **Endpoints**: 
+  - GET `/api/quotes/:symbol` - Single stock quote
+  - GET `/api/quotes/trades/open` - Quotes for all open trades
+- **Rate Limits**: Free tier allows 25 requests/day, 5/minute (caching reduces API calls)
+- **Environment Variable**: `ALPHA_VANTAGE_API_KEY` (stored as secret)
+- **UI Display**: Open trade cards show current price and calculated live P&L
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
