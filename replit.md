@@ -31,6 +31,19 @@ The frontend follows a component-based architecture with:
 - **Compact Grid Layout**: Trades display in responsive grid with 2-4 columns based on screen size
 - **Social Features**: Like and comment on shared trades
 - **Live Pricing**: Alpha Vantage integration for real-time stock prices on open trades
+- **Expiration Tracking**: Closed trades show "what-if" analysis comparing actual exit vs holding to expiration
+
+### Expiration Tracking System
+- **Purpose**: Analyze if closing early was the right decision
+- **Schema Fields**: `expirationStockPrice`, `theoreticalExitValue`, `missedPnl` (all nullable on Trade)
+- **Calculation Logic**: 
+  - Uses position multiplier to distinguish debit vs credit trades
+  - Derives direction from net premium flow (leg premiums) or strategy type fallback
+  - `missedPnl` = (expiration P&L - actual P&L) × contracts × 100
+- **UI Display**: 
+  - Amber badge: "If held to expiry" (positive missedPnl = missed opportunity)
+  - Green badge: "Good exit!" (negative missedPnl = saved money)
+- **API Endpoint**: POST `/api/trades/:id/calculate-expiration` triggers calculation
 
 ### Alpha Vantage Integration
 - **Service**: `server/alpha-vantage.ts` handles API calls with 5-minute caching
