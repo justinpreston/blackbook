@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertTradeSchema, insertCommentSchema, type FeedFilter } from "@shared/schema";
+import { getStockQuote, getMultipleQuotes } from "./alpha-vantage";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -134,6 +135,36 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Comment creation error:", error);
       res.status(400).json({ error: error.message || "Invalid comment data" });
+    }
+  });
+
+  // Get current stock price
+  app.get("/api/quotes/:symbol", async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const quote = await getStockQuote(symbol);
+    if (!quote) {
+      return res.status(404).json({ error: "Quote not found or rate limit exceeded" });
+    }
+    res.json(quote);
+  });
+
+  // Get prices for open trades
+  app.get("/api/quotes/trades/open", async (req, res) => {
+    try {
+      const trades = await storage.getTrades("open");
+      const symbols = trades.map(t => t.ticker);
+      const quotes = await getMultipleQuotes(symbols);
+      
+      // Convert Map to object for JSON serialization
+      const quotesObj: Record<string, any> = {};
+      quotes.forEach((quote, symbol) => {
+        quotesObj[symbol] = quote;
+      });
+      
+      res.json(quotesObj);
+    } catch (error: any) {
+      console.error("Error fetching quotes:", error);
+      res.status(500).json({ error: "Failed to fetch quotes" });
     }
   });
 
