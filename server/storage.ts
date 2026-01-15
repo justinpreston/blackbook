@@ -93,6 +93,7 @@ export class MemStorage implements IStorage {
         expirationStockPrice: null,
         theoreticalExitValue: null,
         missedPnl: null,
+        editedAt: null,
       },
       {
         id: "trade2",
@@ -123,6 +124,7 @@ export class MemStorage implements IStorage {
         expirationStockPrice: null,
         theoreticalExitValue: null,
         missedPnl: null,
+        editedAt: null,
       },
       {
         id: "trade3",
@@ -150,6 +152,7 @@ export class MemStorage implements IStorage {
         expirationStockPrice: 485,
         theoreticalExitValue: 0,
         missedPnl: -630, // Exited at $2.10, would be worthless - saved $630
+        editedAt: null,
       },
       {
         id: "trade4",
@@ -177,6 +180,7 @@ export class MemStorage implements IStorage {
         expirationStockPrice: null,
         theoreticalExitValue: null,
         missedPnl: null,
+        editedAt: null,
       },
       {
         id: "trade5",
@@ -205,6 +209,7 @@ export class MemStorage implements IStorage {
         expirationStockPrice: null,
         theoreticalExitValue: null,
         missedPnl: null,
+        editedAt: null,
       },
       {
         id: "trade6",
@@ -232,6 +237,7 @@ export class MemStorage implements IStorage {
         expirationStockPrice: 520,
         theoreticalExitValue: 20, // META 500 call at expiry with stock at 520 = $20 intrinsic
         missedPnl: -400, // Exited at $22, would be $20 at expiry - saved $400 by exiting early
+        editedAt: null,
       },
     ];
 
@@ -336,6 +342,7 @@ export class MemStorage implements IStorage {
       expirationStockPrice: null,
       theoreticalExitValue: null,
       missedPnl: null,
+      editedAt: null,
     };
 
     this.trades.set(id, trade);

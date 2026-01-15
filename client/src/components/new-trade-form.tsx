@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Loader2 } from "lucide-react";
-import { STRATEGIES, strategyTypes, type StrategyType, insertTradeSchema, tradeLegSchema } from "@shared/schema";
+import { STRATEGIES, strategyTypes, type StrategyType, insertTradeSchema, tradeLegSchema, type Trade } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 const formSchema = insertTradeSchema.omit({ userId: true }).extend({
@@ -54,6 +54,7 @@ interface NewTradeFormProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: FormValues) => Promise<void>;
   isSubmitting: boolean;
+  editingTrade?: Trade | null;
 }
 
 const categoryGroups = [
@@ -62,16 +63,38 @@ const categoryGroups = [
   { label: "Multi-Leg Strategies", category: "advanced" },
 ];
 
-export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: NewTradeFormProps) {
-  const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>("LONG_CALL");
+export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting, editingTrade }: NewTradeFormProps) {
+  const isEditing = !!editingTrade;
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>(editingTrade?.strategy || "LONG_CALL");
   const strategyInfo = STRATEGIES[selectedStrategy];
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
+  const getDefaultValues = () => {
+    if (editingTrade) {
+      return {
+        ticker: editingTrade.ticker,
+        strategy: editingTrade.strategy,
+        status: editingTrade.status,
+        entryPrice: editingTrade.entryPrice,
+        exitPrice: editingTrade.exitPrice ?? "",
+        quantity: editingTrade.quantity,
+        entryDate: editingTrade.entryDate,
+        exitDate: editingTrade.exitDate ?? "",
+        notes: editingTrade.notes ?? "",
+        maxProfit: editingTrade.maxProfit ?? "",
+        maxLoss: editingTrade.maxLoss ?? "",
+        shared: editingTrade.shared,
+        legs: editingTrade.legs.map(leg => ({
+          ...leg,
+          strike: leg.strike ?? "",
+          premium: leg.premium ?? "",
+          expiration: leg.expiration ?? "",
+        })),
+      };
+    }
+    return {
       ticker: "",
-      strategy: "LONG_CALL",
-      status: "OPEN",
+      strategy: "LONG_CALL" as StrategyType,
+      status: "OPEN" as const,
       entryPrice: "" as any,
       exitPrice: "",
       quantity: 1,
@@ -81,9 +104,22 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
       maxProfit: "",
       maxLoss: "",
       shared: false,
-      legs: [{ type: "CALL", action: "BUY", quantity: 1, strike: "", expiration: "", premium: "" }],
-    },
+      legs: [{ type: "CALL" as const, action: "BUY" as const, quantity: 1, strike: "", expiration: "", premium: "" }],
+    };
+  };
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: getDefaultValues(),
   });
+
+  // Reset form when editingTrade changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset(getDefaultValues());
+      setSelectedStrategy(editingTrade?.strategy || "LONG_CALL");
+    }
+  }, [open, editingTrade]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -118,7 +154,7 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
       quantity: Number(values.quantity),
       maxProfit: values.maxProfit === "" || values.maxProfit === undefined ? null : Number(values.maxProfit),
       maxLoss: values.maxLoss === "" || values.maxLoss === undefined ? null : Number(values.maxLoss),
-      shared: false,
+      shared: isEditing ? values.shared : false,
       legs: values.legs.map(leg => ({
         ...leg,
         quantity: Number(leg.quantity),
@@ -141,10 +177,12 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>{strategyInfo.emoji}</span>
-            Log New Trade
+            {isEditing ? "Edit Trade" : "Log New Trade"}
           </DialogTitle>
           <DialogDescription>
-            Share your trade with the team. Select a strategy and fill in the details.
+            {isEditing 
+              ? "Update your trade details. Changes will be saved when you submit."
+              : "Share your trade with the team. Select a strategy and fill in the details."}
           </DialogDescription>
         </DialogHeader>
 
@@ -521,7 +559,7 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting }: New
               </Button>
               <Button type="submit" disabled={isSubmitting} data-testid="button-submit-trade">
                 {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Post Trade
+                {isEditing ? "Save Changes" : "Post Trade"}
               </Button>
             </div>
           </form>

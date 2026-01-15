@@ -32,6 +32,19 @@ The frontend follows a component-based architecture with:
 - **Social Features**: Like and comment on shared trades
 - **Live Pricing**: Alpha Vantage integration for real-time stock prices on open trades
 - **Expiration Tracking**: Closed trades show "what-if" analysis comparing actual exit vs holding to expiration
+- **Edit Trades**: Trade owners can edit their trades with automatic P&L recalculation
+
+### Edit Trade Feature
+- **Access**: Edit button (Pencil icon) visible only to trade owners on trade cards
+- **Form**: NewTradeForm component supports both create and edit modes
+- **Schema Field**: `editedAt` (nullable string) tracks when trade was last edited
+- **UI Indicator**: "(edited)" text appears next to trader name for modified trades
+- **Behavior**: 
+  - Pre-fills form with existing trade data
+  - Preserves shared status when editing
+  - Recalculates P&L when exit price changes
+  - Resets expiration tracking fields on edit
+- **API Endpoint**: PUT `/api/trades/:id` updates trade and sets editedAt timestamp
 
 ### Expiration Tracking System
 - **Purpose**: Analyze if closing early was the right decision

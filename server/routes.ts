@@ -74,6 +74,52 @@ export async function registerRoutes(
     }
   });
 
+  // Update existing trade
+  app.put("/api/trades/:id", async (req, res) => {
+    try {
+      const tradeId = req.params.id;
+      const trade = await storage.getTrade(tradeId);
+      
+      if (!trade) {
+        return res.status(404).json({ error: "Trade not found" });
+      }
+      
+      // Only allow owner to edit
+      if (trade.userId !== "guest") {
+        return res.status(403).json({ error: "Not authorized to edit this trade" });
+      }
+      
+      const data = insertTradeSchema.omit({ userId: true }).parse(req.body);
+      
+      // Calculate P&L for closed trades
+      let pnl: number | null = null;
+      let pnlPercent: number | null = null;
+      
+      if (data.exitPrice !== undefined && data.exitPrice !== null && data.status === "CLOSED") {
+        const cost = data.entryPrice * data.quantity * 100;
+        const proceeds = data.exitPrice * data.quantity * 100;
+        pnl = proceeds - cost;
+        pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
+      }
+      
+      const updatedTrade = await storage.updateTrade(tradeId, {
+        ...data,
+        pnl,
+        pnlPercent,
+        editedAt: new Date().toISOString(),
+        // Reset expiration tracking when trade is edited
+        expirationStockPrice: null,
+        theoreticalExitValue: null,
+        missedPnl: null,
+      });
+      
+      res.json(updatedTrade);
+    } catch (error: any) {
+      console.error("Trade update error:", error);
+      res.status(400).json({ error: error.message || "Invalid trade data" });
+    }
+  });
+
   // Toggle share on trade
   app.post("/api/trades/:id/share", async (req, res) => {
     const tradeId = req.params.id;

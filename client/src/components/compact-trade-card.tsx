@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { StrategyBadge } from "@/components/strategy-badge";
-import { Heart, MessageCircle, TrendingUp, TrendingDown, Share2, RefreshCw } from "lucide-react";
+import { Heart, MessageCircle, TrendingUp, TrendingDown, Share2, RefreshCw, Pencil } from "lucide-react";
 import { type Trade, type User } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,7 @@ interface CompactTradeCardProps {
   onLike: (tradeId: string) => void;
   onComment: (tradeId: string) => void;
   onShare?: (tradeId: string) => void;
+  onEdit?: (trade: Trade) => void;
   showShareToggle?: boolean;
   currentQuote?: StockQuote | null;
 }
@@ -33,6 +34,7 @@ export function CompactTradeCard({
   onLike,
   onComment,
   onShare,
+  onEdit,
   showShareToggle = false,
   currentQuote,
 }: CompactTradeCardProps) {
@@ -104,6 +106,9 @@ export function CompactTradeCard({
             <span className="text-xs text-muted-foreground truncate" data-testid={`text-trader-name-${trade.id}`}>
               {user.displayName}
             </span>
+            {trade.editedAt && (
+              <span className="text-xs text-muted-foreground italic">(edited)</span>
+            )}
           </div>
           {getStatusBadge()}
         </div>
@@ -198,6 +203,17 @@ export function CompactTradeCard({
               <MessageCircle className="h-3.5 w-3.5" />
               <span className="tabular-nums text-xs">{trade.commentCount}</span>
             </Button>
+            {trade.userId === currentUserId && onEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 h-7 px-2"
+                onClick={() => onEdit(trade)}
+                data-testid={`button-edit-${trade.id}`}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
           {showShareToggle && onShare && (
             <div className="flex items-center gap-2">

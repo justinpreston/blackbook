@@ -75,6 +75,8 @@ export interface Trade extends InsertTrade {
   expirationStockPrice: number | null;  // Stock price at option expiration
   theoreticalExitValue: number | null;  // What the option was worth at expiration
   missedPnl: number | null;             // Difference: theoretical value - actual exit
+  // Edit tracking
+  editedAt: string | null;              // Timestamp of last edit
 }
 
 // Comment schema

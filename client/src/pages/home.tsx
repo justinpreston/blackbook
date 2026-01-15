@@ -29,6 +29,7 @@ export default function Home() {
   const [homeFilter, setHomeFilter] = useState<FeedFilter>("all");
   const [myFilter, setMyFilter] = useState<FeedFilter>("all");
   const [commentTradeId, setCommentTradeId] = useState<string | null>(null);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
 
   const { data: currentUser } = useQuery<User>({
     queryKey: ["/api/users/me"],
@@ -164,6 +165,30 @@ export default function Home() {
     },
   });
 
+  const editTradeMutation = useMutation({
+    mutationFn: async ({ tradeId, data }: { tradeId: string; data: Omit<InsertTrade, "userId"> }) => {
+      const result = await apiRequest("PUT", `/api/trades/${tradeId}`, data);
+      return result.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/shared"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      setEditingTrade(null);
+      toast({
+        title: "Trade updated!",
+        description: "Your trade has been updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update trade",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLike = useCallback((tradeId: string) => {
     likeMutation.mutate(tradeId);
   }, [likeMutation]);
@@ -178,6 +203,26 @@ export default function Home() {
 
   const handleSubmitComment = async (tradeId: string, content: string) => {
     await commentMutation.mutateAsync({ tradeId, content });
+  };
+
+  const handleEdit = useCallback((trade: Trade) => {
+    setEditingTrade(trade);
+    setShowNewTradeForm(true);
+  }, []);
+
+  const handleTradeFormSubmit = async (data: Omit<InsertTrade, "userId">) => {
+    if (editingTrade) {
+      await editTradeMutation.mutateAsync({ tradeId: editingTrade.id, data });
+    } else {
+      await createTradeMutation.mutateAsync(data);
+    }
+  };
+
+  const handleTradeFormClose = (open: boolean) => {
+    setShowNewTradeForm(open);
+    if (!open) {
+      setEditingTrade(null);
+    }
   };
 
   const handleConfettiComplete = useCallback(() => {
@@ -239,6 +284,7 @@ export default function Home() {
             onLike={handleLike}
             onComment={handleComment}
             onShare={handleShare}
+            onEdit={handleEdit}
             showShareToggle={showShareToggle}
             currentQuote={trade.status === "OPEN" ? quotes[trade.ticker.toUpperCase()] : undefined}
           />
@@ -298,9 +344,10 @@ export default function Home() {
 
       <NewTradeForm
         open={showNewTradeForm}
-        onOpenChange={setShowNewTradeForm}
-        onSubmit={createTradeMutation.mutateAsync as any}
-        isSubmitting={createTradeMutation.isPending}
+        onOpenChange={handleTradeFormClose}
+        onSubmit={handleTradeFormSubmit as any}
+        isSubmitting={editingTrade ? editTradeMutation.isPending : createTradeMutation.isPending}
+        editingTrade={editingTrade}
       />
 
       <CommentDialog
