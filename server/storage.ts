@@ -20,9 +20,12 @@ export interface IStorage {
   // Trades
   getTrade(id: string): Promise<Trade | undefined>;
   getTrades(filter?: FeedFilter): Promise<Trade[]>;
+  getSharedTrades(filter?: FeedFilter): Promise<Trade[]>;
+  getUserTrades(userId: string, filter?: FeedFilter): Promise<Trade[]>;
   createTrade(trade: InsertTrade): Promise<Trade>;
   updateTrade(id: string, data: Partial<Trade>): Promise<Trade | undefined>;
   deleteTrade(id: string): Promise<boolean>;
+  toggleShare(tradeId: string): Promise<boolean>;
 
   // Likes
   toggleLike(tradeId: string, userId: string): Promise<boolean>;
@@ -84,6 +87,7 @@ export class MemStorage implements IStorage {
         pnlPercent: 124.1,
         likes: ["user2", "user3"],
         commentCount: 2,
+        shared: true,
       },
       {
         id: "trade2",
@@ -110,6 +114,7 @@ export class MemStorage implements IStorage {
         pnlPercent: null,
         likes: ["user1"],
         commentCount: 1,
+        shared: true,
       },
       {
         id: "trade3",
@@ -133,6 +138,7 @@ export class MemStorage implements IStorage {
         pnlPercent: -75.3,
         likes: [],
         commentCount: 0,
+        shared: false,
       },
       {
         id: "trade4",
@@ -156,6 +162,56 @@ export class MemStorage implements IStorage {
         pnlPercent: null,
         likes: ["user2", "user3", "guest"],
         commentCount: 3,
+        shared: true,
+      },
+      {
+        id: "trade5",
+        ticker: "AMD",
+        strategy: "COVERED_CALL",
+        status: "OPEN",
+        legs: [
+          { type: "STOCK", action: "BUY", strike: null, expiration: undefined, quantity: 100, premium: undefined },
+          { type: "CALL", action: "SELL", strike: 180, expiration: "2025-02-14", quantity: 1, premium: 3.25 },
+        ],
+        entryPrice: 175.00,
+        exitPrice: undefined,
+        quantity: 1,
+        entryDate: "2025-01-12",
+        exitDate: undefined,
+        notes: "Selling premium on my AMD shares",
+        maxProfit: undefined,
+        maxLoss: undefined,
+        userId: "guest",
+        createdAt: new Date(Date.now() - 7200000).toISOString(),
+        pnl: null,
+        pnlPercent: null,
+        likes: [],
+        commentCount: 0,
+        shared: false,
+      },
+      {
+        id: "trade6",
+        ticker: "META",
+        strategy: "LONG_CALL",
+        status: "CLOSED",
+        legs: [
+          { type: "CALL", action: "BUY", strike: 500, expiration: "2025-01-31", quantity: 2, premium: 12.50 },
+        ],
+        entryPrice: 12.50,
+        exitPrice: 22.00,
+        quantity: 2,
+        entryDate: "2025-01-05",
+        exitDate: "2025-01-11",
+        notes: "Quick earnings play, nailed it!",
+        maxProfit: undefined,
+        maxLoss: undefined,
+        userId: "guest",
+        createdAt: new Date(Date.now() - 345600000).toISOString(),
+        pnl: 1900,
+        pnlPercent: 76.0,
+        likes: ["user1", "user2"],
+        commentCount: 1,
+        shared: true,
       },
     ];
 
@@ -199,9 +255,7 @@ export class MemStorage implements IStorage {
     return this.trades.get(id);
   }
 
-  async getTrades(filter?: FeedFilter): Promise<Trade[]> {
-    let trades = Array.from(this.trades.values());
-
+  private applyFilter(trades: Trade[], filter?: FeedFilter): Trade[] {
     if (filter && filter !== "all") {
       switch (filter) {
         case "open":
@@ -218,9 +272,23 @@ export class MemStorage implements IStorage {
           break;
       }
     }
-
     // Sort by createdAt descending
     return trades.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getTrades(filter?: FeedFilter): Promise<Trade[]> {
+    let trades = Array.from(this.trades.values());
+    return this.applyFilter(trades, filter);
+  }
+
+  async getSharedTrades(filter?: FeedFilter): Promise<Trade[]> {
+    let trades = Array.from(this.trades.values()).filter((t) => t.shared === true);
+    return this.applyFilter(trades, filter);
+  }
+
+  async getUserTrades(userId: string, filter?: FeedFilter): Promise<Trade[]> {
+    let trades = Array.from(this.trades.values()).filter((t) => t.userId === userId);
+    return this.applyFilter(trades, filter);
   }
 
   async createTrade(insertTrade: InsertTrade): Promise<Trade> {
@@ -262,6 +330,14 @@ export class MemStorage implements IStorage {
 
   async deleteTrade(id: string): Promise<boolean> {
     return this.trades.delete(id);
+  }
+
+  async toggleShare(tradeId: string): Promise<boolean> {
+    const trade = this.trades.get(tradeId);
+    if (!trade) return false;
+    trade.shared = !trade.shared;
+    this.trades.set(tradeId, trade);
+    return trade.shared;
   }
 
   // Likes

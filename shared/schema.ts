@@ -59,6 +59,7 @@ export const insertTradeSchema = z.object({
   maxProfit: z.coerce.number().optional().nullable(),
   maxLoss: z.coerce.number().optional().nullable(),
   userId: z.string(),
+  shared: z.boolean().default(false),
 });
 
 export type InsertTrade = z.infer<typeof insertTradeSchema>;

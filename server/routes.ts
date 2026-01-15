@@ -28,7 +28,21 @@ export async function registerRoutes(
     res.json(stats);
   });
 
-  // Get trades with optional filter
+  // Get all shared trades (for home feed)
+  app.get("/api/trades/shared", async (req, res) => {
+    const filter = (req.query.filter as FeedFilter) || "all";
+    const trades = await storage.getSharedTrades(filter);
+    res.json(trades);
+  });
+
+  // Get current user's trades (for My Trades tab)
+  app.get("/api/trades/mine", async (req, res) => {
+    const filter = (req.query.filter as FeedFilter) || "all";
+    const trades = await storage.getUserTrades("guest", filter);
+    res.json(trades);
+  });
+
+  // Get trades with optional filter (legacy)
   app.get("/api/trades", async (req, res) => {
     const filter = (req.query.filter as FeedFilter) || "all";
     const trades = await storage.getTrades(filter);
@@ -57,6 +71,21 @@ export async function registerRoutes(
       console.error("Trade creation error:", error);
       res.status(400).json({ error: error.message || "Invalid trade data" });
     }
+  });
+
+  // Toggle share on trade
+  app.post("/api/trades/:id/share", async (req, res) => {
+    const tradeId = req.params.id;
+    const trade = await storage.getTrade(tradeId);
+    if (!trade) {
+      return res.status(404).json({ error: "Trade not found" });
+    }
+    // Only allow owner to toggle share
+    if (trade.userId !== "guest") {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+    const shared = await storage.toggleShare(tradeId);
+    res.json({ shared });
   });
 
   // Toggle like on trade
