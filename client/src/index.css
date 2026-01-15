@@ -43,19 +43,16 @@
   --chart-3: 271 91% 65%;
   --chart-4: 38 92% 50%;
   --chart-5: 340 82% 52%;
-  --font-sans: Open Sans, sans-serif;
+  --font-sans: Inter, sans-serif;
   --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
+  --font-mono: "JetBrains Mono", monospace;
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 100%;
+  --profit: 142 76% 36%;
+  --profit-foreground: 0 0% 100%;
+  --loss: 0 84% 60%;
+  --loss-foreground: 0 0% 100%;
   --radius: .5rem;
-  --shadow-2xs: 0px 2px 0px 0px hsl(217 91% 60% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(217 91% 60% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 1px 2px -1px hsl(217 91% 60% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 1px 2px -1px hsl(217 91% 60% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 2px 4px -1px hsl(217 91% 60% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 4px 6px -1px hsl(217 91% 60% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 8px 10px -1px hsl(217 91% 60% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.00);
-  --tracking-normal: 0em;
   --spacing: 0.25rem;
 
 /* Fallback for older browsers */
@@ -127,7 +124,12 @@
   --chart-3: 271 91% 75%;
   --chart-4: 38 92% 65%;
   --chart-5: 340 82% 67%;
-  --shadow-2xs: 0px 2px 0px 0px hsl(217 91% 60% / 0.00);
+  --success: 142 76% 46%;
+  --success-foreground: 0 0% 100%;
+  --profit: 142 76% 46%;
+  --profit-foreground: 0 0% 100%;
+  --loss: 0 72% 55%;
+  --loss-foreground: 0 0% 100%;
   --shadow-xs: 0px 2px 0px 0px hsl(217 91% 60% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 1px 2px -1px hsl(217 91% 60% / 0.00);
   --shadow: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 1px 2px -1px hsl(217 91% 60% / 0.00);
