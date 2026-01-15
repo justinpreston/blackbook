@@ -168,5 +168,63 @@ export async function registerRoutes(
     }
   });
 
+  // Calculate expiration value for a closed trade
+  app.post("/api/trades/:id/calculate-expiration", async (req, res) => {
+    try {
+      const tradeId = req.params.id;
+      const trade = await storage.getTrade(tradeId);
+      
+      if (!trade) {
+        return res.status(404).json({ error: "Trade not found" });
+      }
+      
+      if (trade.status !== "CLOSED") {
+        return res.status(400).json({ error: "Trade must be closed to calculate expiration value" });
+      }
+      
+      // Find the expiration date from the legs
+      const optionLegs = trade.legs.filter(leg => leg.type !== "STOCK" && leg.expiration);
+      if (optionLegs.length === 0) {
+        return res.status(400).json({ error: "No option legs found with expiration dates" });
+      }
+      
+      // Get current stock price (ideally we'd get historical price at expiration)
+      const quote = await getStockQuote(trade.ticker);
+      if (!quote) {
+        return res.status(500).json({ error: "Failed to fetch stock price" });
+      }
+      
+      // Calculate theoretical value at expiration for each leg
+      let theoreticalValue = 0;
+      for (const leg of optionLegs) {
+        if (!leg.strike) continue;
+        
+        const intrinsicValue = leg.type === "CALL" 
+          ? Math.max(0, quote.price - leg.strike)
+          : Math.max(0, leg.strike - quote.price);
+        
+        const legValue = leg.action === "BUY" ? intrinsicValue : -intrinsicValue;
+        theoreticalValue += legValue * (leg.quantity || 1);
+      }
+      
+      // Normalize by total quantity of first leg
+      theoreticalValue = theoreticalValue / (optionLegs[0].quantity || 1);
+      
+      // Update the trade with expiration data
+      const updatedTrade = await storage.updateExpirationData(tradeId, quote.price, theoreticalValue);
+      
+      res.json(updatedTrade);
+    } catch (error: any) {
+      console.error("Error calculating expiration:", error);
+      res.status(500).json({ error: "Failed to calculate expiration value" });
+    }
+  });
+
+  // Get trades needing expiration calculation
+  app.get("/api/trades/expired", async (req, res) => {
+    const trades = await storage.getExpiredTrades();
+    res.json(trades);
+  });
+
   return httpServer;
 }

@@ -159,6 +159,23 @@ export function CompactTradeCard({
           {trade.quantity} {trade.quantity === 1 ? "contract" : "contracts"} @ ${trade.entryPrice.toFixed(2)}
         </div>
 
+        {trade.status === "CLOSED" && trade.missedPnl !== null && (
+          <div className={cn(
+            "text-xs p-2 rounded-md mb-3",
+            trade.missedPnl > 0 ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-green-500/10 text-green-700 dark:text-green-400"
+          )}>
+            {trade.missedPnl > 0 ? (
+              <span>
+                If held to expiry @ ${trade.expirationStockPrice?.toFixed(2)}: {formatPnl(trade.missedPnl)} more
+              </span>
+            ) : (
+              <span>
+                Good exit! At expiry @ ${trade.expirationStockPrice?.toFixed(2)}: {formatPnl(Math.abs(trade.missedPnl))} saved
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between border-t pt-3">
           <div className="flex items-center gap-2">
             <Button

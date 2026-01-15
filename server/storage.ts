@@ -26,6 +26,8 @@ export interface IStorage {
   updateTrade(id: string, data: Partial<Trade>): Promise<Trade | undefined>;
   deleteTrade(id: string): Promise<boolean>;
   toggleShare(tradeId: string): Promise<boolean>;
+  getExpiredTrades(): Promise<Trade[]>;
+  updateExpirationData(tradeId: string, stockPrice: number, theoreticalValue: number): Promise<Trade | undefined>;
 
   // Likes
   toggleLike(tradeId: string, userId: string): Promise<boolean>;
@@ -88,6 +90,9 @@ export class MemStorage implements IStorage {
         likes: ["user2", "user3"],
         commentCount: 2,
         shared: true,
+        expirationStockPrice: null,
+        theoreticalExitValue: null,
+        missedPnl: null,
       },
       {
         id: "trade2",
@@ -115,6 +120,9 @@ export class MemStorage implements IStorage {
         likes: ["user1"],
         commentCount: 1,
         shared: true,
+        expirationStockPrice: null,
+        theoreticalExitValue: null,
+        missedPnl: null,
       },
       {
         id: "trade3",
@@ -139,6 +147,9 @@ export class MemStorage implements IStorage {
         likes: [],
         commentCount: 0,
         shared: false,
+        expirationStockPrice: 485,
+        theoreticalExitValue: 0,
+        missedPnl: 640,
       },
       {
         id: "trade4",
@@ -163,6 +174,9 @@ export class MemStorage implements IStorage {
         likes: ["user2", "user3", "guest"],
         commentCount: 3,
         shared: true,
+        expirationStockPrice: null,
+        theoreticalExitValue: null,
+        missedPnl: null,
       },
       {
         id: "trade5",
@@ -188,6 +202,9 @@ export class MemStorage implements IStorage {
         likes: [],
         commentCount: 0,
         shared: false,
+        expirationStockPrice: null,
+        theoreticalExitValue: null,
+        missedPnl: null,
       },
       {
         id: "trade6",
@@ -212,6 +229,9 @@ export class MemStorage implements IStorage {
         likes: ["user1", "user2"],
         commentCount: 1,
         shared: true,
+        expirationStockPrice: 520,
+        theoreticalExitValue: 40,
+        missedPnl: 3600,
       },
     ];
 
@@ -313,6 +333,9 @@ export class MemStorage implements IStorage {
       pnlPercent,
       likes: [],
       commentCount: 0,
+      expirationStockPrice: null,
+      theoreticalExitValue: null,
+      missedPnl: null,
     };
 
     this.trades.set(id, trade);
@@ -338,6 +361,38 @@ export class MemStorage implements IStorage {
     trade.shared = !trade.shared;
     this.trades.set(tradeId, trade);
     return trade.shared;
+  }
+
+  async getExpiredTrades(): Promise<Trade[]> {
+    const today = new Date().toISOString().split("T")[0];
+    return Array.from(this.trades.values()).filter((t) => {
+      // Find trades that are closed and have options with expiration dates that have passed
+      if (t.status !== "CLOSED" || t.expirationStockPrice !== null) return false;
+      const hasExpiredOption = t.legs.some((leg) => {
+        if (leg.type === "STOCK" || !leg.expiration) return false;
+        return leg.expiration <= today;
+      });
+      return hasExpiredOption;
+    });
+  }
+
+  async updateExpirationData(tradeId: string, stockPrice: number, theoreticalValue: number): Promise<Trade | undefined> {
+    const trade = this.trades.get(tradeId);
+    if (!trade) return undefined;
+
+    // Calculate missed P&L
+    const exitPrice = trade.exitPrice || 0;
+    const missedPnl = (theoreticalValue - exitPrice) * trade.quantity * 100;
+
+    const updated: Trade = {
+      ...trade,
+      expirationStockPrice: stockPrice,
+      theoreticalExitValue: theoreticalValue,
+      missedPnl,
+    };
+
+    this.trades.set(tradeId, updated);
+    return updated;
   }
 
   // Likes

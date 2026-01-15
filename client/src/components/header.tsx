@@ -18,7 +18,7 @@ export function Header({ onNewTrade }: HeaderProps) {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">BlackBook</h1>
-            <p className="text-xs text-muted-foreground hidden sm:block">Your Secret Trading Playbook</p>
+            <p className="text-xs text-muted-foreground hidden sm:block">Share trades with your team</p>
           </div>
         </div>
 

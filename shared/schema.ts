@@ -71,6 +71,10 @@ export interface Trade extends InsertTrade {
   pnlPercent: number | null;
   likes: string[];
   commentCount: number;
+  // Expiration tracking for closed trades
+  expirationStockPrice: number | null;  // Stock price at option expiration
+  theoreticalExitValue: number | null;  // What the option was worth at expiration
+  missedPnl: number | null;             // Difference: theoretical value - actual exit
 }
 
 // Comment schema
