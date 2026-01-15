@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { StatsGrid } from "@/components/stats-grid";
@@ -13,6 +13,13 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type Trade, type User, type UserStats, type Comment, type FeedFilter, type InsertTrade } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Home as HomeIcon, User as UserIcon } from "lucide-react";
+
+interface StockQuote {
+  symbol: string;
+  price: number;
+  change: number;
+  changePercent: number;
+}
 
 export default function Home() {
   const { toast } = useToast();
@@ -65,6 +72,21 @@ export default function Home() {
   });
 
   const usersMap = new Map(users.map((u) => [u.id, u]));
+
+  // Get unique ticker symbols from open trades
+  const openTradeSymbols = useMemo(() => {
+    const allTrades = [...sharedTrades, ...myTrades];
+    const openTrades = allTrades.filter(t => t.status === "OPEN");
+    return Array.from(new Set(openTrades.map(t => t.ticker)));
+  }, [sharedTrades, myTrades]);
+
+  // Fetch quotes for open trades (refreshes every 5 minutes)
+  const { data: quotes = {} } = useQuery<Record<string, StockQuote>>({
+    queryKey: ["/api/quotes/trades/open"],
+    enabled: openTradeSymbols.length > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
+  });
 
   const createTradeMutation = useMutation({
     mutationFn: async (data: Omit<InsertTrade, "userId">) => {
@@ -218,6 +240,7 @@ export default function Home() {
             onComment={handleComment}
             onShare={handleShare}
             showShareToggle={showShareToggle}
+            currentQuote={trade.status === "OPEN" ? quotes[trade.ticker.toUpperCase()] : undefined}
           />
         ))}
       </div>
@@ -276,7 +299,7 @@ export default function Home() {
       <NewTradeForm
         open={showNewTradeForm}
         onOpenChange={setShowNewTradeForm}
-        onSubmit={createTradeMutation.mutateAsync}
+        onSubmit={createTradeMutation.mutateAsync as any}
         isSubmitting={createTradeMutation.isPending}
       />
 

@@ -4,9 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { StrategyBadge } from "@/components/strategy-badge";
-import { Heart, MessageCircle, TrendingUp, TrendingDown, Share2 } from "lucide-react";
+import { Heart, MessageCircle, TrendingUp, TrendingDown, Share2, RefreshCw } from "lucide-react";
 import { type Trade, type User } from "@shared/schema";
 import { cn } from "@/lib/utils";
+
+interface StockQuote {
+  symbol: string;
+  price: number;
+  change: number;
+  changePercent: number;
+}
 
 interface CompactTradeCardProps {
   trade: Trade;
@@ -16,6 +23,7 @@ interface CompactTradeCardProps {
   onComment: (tradeId: string) => void;
   onShare?: (tradeId: string) => void;
   showShareToggle?: boolean;
+  currentQuote?: StockQuote | null;
 }
 
 export function CompactTradeCard({
@@ -26,10 +34,23 @@ export function CompactTradeCard({
   onComment,
   onShare,
   showShareToggle = false,
+  currentQuote,
 }: CompactTradeCardProps) {
   const isLiked = trade.likes.includes(currentUserId);
-  const isProfitable = trade.pnl !== null && trade.pnl > 0;
-  const isLoss = trade.pnl !== null && trade.pnl < 0;
+  
+  // Calculate live P&L for open trades
+  let displayPnl = trade.pnl;
+  let displayPnlPercent = trade.pnlPercent;
+  
+  if (trade.status === "OPEN" && currentQuote && trade.entryPrice > 0) {
+    const currentValue = currentQuote.price * trade.quantity * 100; // Options are 100 shares per contract
+    const entryValue = trade.entryPrice * trade.quantity * 100;
+    displayPnl = currentValue - entryValue;
+    displayPnlPercent = ((currentQuote.price - trade.entryPrice) / trade.entryPrice) * 100;
+  }
+  
+  const isProfitable = displayPnl !== null && displayPnl > 0;
+  const isLoss = displayPnl !== null && displayPnl < 0;
 
   const formatPnl = (pnl: number | null) => {
     if (pnl === null) return "—";
@@ -92,30 +113,36 @@ export function CompactTradeCard({
             <span className="text-xl font-bold tracking-tight" data-testid={`text-ticker-${trade.id}`}>
               {trade.ticker}
             </span>
-            {trade.status === "CLOSED" && (
-              isProfitable ? (
-                <TrendingUp className="h-4 w-4 text-profit" />
-              ) : isLoss ? (
-                <TrendingDown className="h-4 w-4 text-loss" />
-              ) : null
-            )}
+            {isProfitable ? (
+              <TrendingUp className="h-4 w-4 text-profit" />
+            ) : isLoss ? (
+              <TrendingDown className="h-4 w-4 text-loss" />
+            ) : null}
           </div>
-          <div
-            className={cn(
-              "text-lg font-bold tabular-nums",
-              isProfitable && "text-profit",
-              isLoss && "text-loss",
-              trade.pnl === null && "text-muted-foreground"
+          <div className="flex flex-col items-end">
+            {trade.status === "OPEN" && currentQuote && (
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <RefreshCw className="h-2.5 w-2.5" />
+                ${currentQuote.price.toFixed(2)}
+              </div>
             )}
-            data-testid={`text-pnl-${trade.id}`}
-          >
-            {formatPnl(trade.pnl)}
+            <div
+              className={cn(
+                "text-lg font-bold tabular-nums",
+                isProfitable && "text-profit",
+                isLoss && "text-loss",
+                displayPnl === null && "text-muted-foreground"
+              )}
+              data-testid={`text-pnl-${trade.id}`}
+            >
+              {formatPnl(displayPnl)}
+            </div>
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-2 mb-3">
           <StrategyBadge strategy={trade.strategy} size="sm" />
-          {trade.pnlPercent !== null && (
+          {displayPnlPercent !== null && (
             <span
               className={cn(
                 "text-xs tabular-nums",
@@ -123,7 +150,7 @@ export function CompactTradeCard({
                 isLoss && "text-loss"
               )}
             >
-              {formatPnlPercent(trade.pnlPercent)}
+              {formatPnlPercent(displayPnlPercent)}
             </span>
           )}
         </div>
