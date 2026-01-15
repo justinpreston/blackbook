@@ -149,7 +149,7 @@ export class MemStorage implements IStorage {
         shared: false,
         expirationStockPrice: 485,
         theoreticalExitValue: 0,
-        missedPnl: 640,
+        missedPnl: -630, // Exited at $2.10, would be worthless - saved $630
       },
       {
         id: "trade4",
@@ -230,8 +230,8 @@ export class MemStorage implements IStorage {
         commentCount: 1,
         shared: true,
         expirationStockPrice: 520,
-        theoreticalExitValue: 40,
-        missedPnl: 3600,
+        theoreticalExitValue: 20, // META 500 call at expiry with stock at 520 = $20 intrinsic
+        missedPnl: -400, // Exited at $22, would be $20 at expiry - saved $400 by exiting early
       },
     ];
 
@@ -380,9 +380,58 @@ export class MemStorage implements IStorage {
     const trade = this.trades.get(tradeId);
     if (!trade) return undefined;
 
-    // Calculate missed P&L
+    // Calculate position multiplier: +1 for net long (debit), -1 for net short (credit)
+    // Sum up action weights: BUY = +1, SELL = -1 (ignoring stock legs)
+    let positionWeight = 0;
+    for (const leg of trade.legs) {
+      if (leg.type === "STOCK") continue;
+      const weight = leg.action === "BUY" ? 1 : -1;
+      positionWeight += weight * (leg.quantity || 1);
+    }
+    
+    // Use premium flow from legs to determine credit vs debit for balanced spreads
+    // If leg premiums are available, sum them (SELL legs add, BUY legs subtract)
+    let netPremiumFlow = 0;
+    let hasPremiumData = false;
+    for (const leg of trade.legs) {
+      if (leg.type === "STOCK" || leg.premium === undefined || leg.premium === null) continue;
+      hasPremiumData = true;
+      const flow = leg.action === "SELL" ? leg.premium : -leg.premium;
+      netPremiumFlow += flow * (leg.quantity || 1);
+    }
+    
+    // Credit strategies (where we receive premium at entry) - fallback if no premium data
+    const creditStrategies = ["BEAR_CALL_SPREAD", "BULL_PUT_SPREAD", "IRON_CONDOR", "IRON_BUTTERFLY", "COVERED_CALL"];
+    
+    // Determine multiplier based on position weight or strategy type for spreads
+    let positionMultiplier: number;
+    if (positionWeight > 0) {
+      positionMultiplier = 1; // Net long = debit
+    } else if (positionWeight < 0) {
+      positionMultiplier = -1; // Net short = credit
+    } else {
+      // Equal buys and sells - use premium flow or strategy type to determine
+      if (hasPremiumData) {
+        // Positive net premium flow = credit trade
+        positionMultiplier = netPremiumFlow > 0 ? -1 : 1;
+      } else {
+        // Fallback to strategy type
+        positionMultiplier = creditStrategies.includes(trade.strategy) ? -1 : 1;
+      }
+    }
+    
     const exitPrice = trade.exitPrice || 0;
-    const missedPnl = (theoreticalValue - exitPrice) * trade.quantity * 100;
+    const entryPrice = trade.entryPrice;
+    
+    // Calculate P&L with position direction
+    // For debit trades (positionMultiplier = 1): P&L = exitPrice - entryPrice
+    // For credit trades (positionMultiplier = -1): P&L = entryPrice - exitPrice
+    const actualPnl = positionMultiplier * (exitPrice - entryPrice);
+    const expirationPnl = positionMultiplier * (theoreticalValue - entryPrice);
+    
+    // missedPnl = what we would have made - what we actually made
+    // Positive = left money on table, Negative = good exit
+    const missedPnl = (expirationPnl - actualPnl) * trade.quantity * 100;
 
     const updated: Trade = {
       ...trade,
