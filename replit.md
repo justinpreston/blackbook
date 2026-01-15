@@ -25,6 +25,12 @@ The frontend follows a component-based architecture with:
 - Custom hooks in `client/src/hooks/`
 - Theme support (light/dark mode) via ThemeProvider
 
+### Key Features
+- **Tab-based Navigation**: Home (team's shared trades) and My Trades (personal trades)
+- **Trade Sharing**: Trades default to private; users toggle sharing via switches on My Trades tab
+- **Compact Grid Layout**: Trades display in responsive grid with 2-4 columns based on screen size
+- **Social Features**: Like and comment on shared trades
+
 ### Backend Architecture
 - **Runtime**: Node.js with Express
 - **Language**: TypeScript with ES modules
