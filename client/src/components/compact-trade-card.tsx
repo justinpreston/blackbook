@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { StrategyBadge } from "@/components/strategy-badge";
-import { Heart, MessageCircle, TrendingUp, TrendingDown, Share2, RefreshCw, Pencil } from "lucide-react";
-import { type Trade, type User } from "@shared/schema";
+import { Heart, MessageCircle, TrendingUp, TrendingDown, Share2, RefreshCw, Pencil, RotateCcw } from "lucide-react";
+import { type Trade, type User, ADJUSTMENT_TYPES } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 interface StockQuote {
@@ -23,6 +23,7 @@ interface CompactTradeCardProps {
   onComment: (tradeId: string) => void;
   onShare?: (tradeId: string) => void;
   onEdit?: (trade: Trade) => void;
+  onRoll?: (trade: Trade) => void;
   showShareToggle?: boolean;
   currentQuote?: StockQuote | null;
 }
@@ -35,6 +36,7 @@ export function CompactTradeCard({
   onComment,
   onShare,
   onEdit,
+  onRoll,
   showShareToggle = false,
   currentQuote,
 }: CompactTradeCardProps) {
@@ -146,7 +148,23 @@ export function CompactTradeCard({
         </div>
 
         <div className="flex items-center justify-between gap-2 mb-3">
-          <StrategyBadge strategy={trade.strategy} size="sm" />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <StrategyBadge strategy={trade.strategy} size="sm" />
+            {trade.adjustmentType && trade.adjustmentType !== "OPEN" && (
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  "text-xs",
+                  trade.adjustmentType === "ROLL" && "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+                  trade.adjustmentType === "ADJUST" && "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
+                  trade.adjustmentType === "CLOSE_OUT" && "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"
+                )}
+                data-testid={`badge-adjustment-${trade.id}`}
+              >
+                {ADJUSTMENT_TYPES[trade.adjustmentType].name}
+              </Badge>
+            )}
+          </div>
           {displayPnlPercent !== null && (
             <span
               className={cn(
@@ -212,6 +230,17 @@ export function CompactTradeCard({
                 data-testid={`button-edit-${trade.id}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {trade.userId === currentUserId && trade.status === "OPEN" && onRoll && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 h-7 px-2 text-purple-600 dark:text-purple-400"
+                onClick={() => onRoll(trade)}
+                data-testid={`button-roll-${trade.id}`}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>

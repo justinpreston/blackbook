@@ -5,6 +5,7 @@ import { StatsGrid } from "@/components/stats-grid";
 import { FeedFilters } from "@/components/feed-filters";
 import { CompactTradeCard } from "@/components/compact-trade-card";
 import { NewTradeForm } from "@/components/new-trade-form";
+import { RollTradeForm } from "@/components/roll-trade-form";
 import { CommentDialog } from "@/components/comment-dialog";
 import { Confetti } from "@/components/confetti";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +31,7 @@ export default function Home() {
   const [myFilter, setMyFilter] = useState<FeedFilter>("all");
   const [commentTradeId, setCommentTradeId] = useState<string | null>(null);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [rollingTrade, setRollingTrade] = useState<Trade | null>(null);
 
   const { data: currentUser } = useQuery<User>({
     queryKey: ["/api/users/me"],
@@ -189,6 +191,31 @@ export default function Home() {
     },
   });
 
+  const rollTradeMutation = useMutation({
+    mutationFn: async ({ parentTradeId, data }: { parentTradeId: string; data: any }) => {
+      const result = await apiRequest("POST", `/api/trades/${parentTradeId}/roll`, data);
+      return result.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/shared"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trades/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      setRollingTrade(null);
+      setShowConfetti(true);
+      toast({
+        title: "Position rolled!",
+        description: "Your position has been closed and a new one opened.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to roll position",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLike = useCallback((tradeId: string) => {
     likeMutation.mutate(tradeId);
   }, [likeMutation]);
@@ -209,6 +236,14 @@ export default function Home() {
     setEditingTrade(trade);
     setShowNewTradeForm(true);
   }, []);
+
+  const handleRoll = useCallback((trade: Trade) => {
+    setRollingTrade(trade);
+  }, []);
+
+  const handleRollSubmit = async (parentTradeId: string, data: any) => {
+    await rollTradeMutation.mutateAsync({ parentTradeId, data });
+  };
 
   const handleTradeFormSubmit = async (data: Omit<InsertTrade, "userId">) => {
     if (editingTrade) {
@@ -285,6 +320,7 @@ export default function Home() {
             onComment={handleComment}
             onShare={handleShare}
             onEdit={handleEdit}
+            onRoll={handleRoll}
             showShareToggle={showShareToggle}
             currentQuote={trade.status === "OPEN" ? quotes[trade.ticker.toUpperCase()] : undefined}
           />
@@ -360,6 +396,14 @@ export default function Home() {
         onSubmit={handleSubmitComment}
         isLoading={commentsLoading}
         isSubmitting={commentMutation.isPending}
+      />
+
+      <RollTradeForm
+        open={!!rollingTrade}
+        onOpenChange={(open) => !open && setRollingTrade(null)}
+        onSubmit={handleRollSubmit}
+        isSubmitting={rollTradeMutation.isPending}
+        parentTrade={rollingTrade}
       />
     </div>
   );
