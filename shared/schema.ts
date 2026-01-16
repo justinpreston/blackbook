@@ -44,6 +44,18 @@ export type TradeLeg = z.infer<typeof tradeLegSchema>;
 // Trade status
 export type TradeStatus = "OPEN" | "CLOSED" | "PARTIAL";
 
+// Adjustment types for position tracking (rolling, adjusting, etc.)
+export const ADJUSTMENT_TYPES = {
+  OPEN: { name: "New Position", description: "Opening a new position" },
+  ROLL: { name: "Roll", description: "Closing existing position and opening new one at different strike/expiration" },
+  ADJUST: { name: "Adjustment", description: "Modifying an existing position (adding/reducing)" },
+  CLOSE_OUT: { name: "Close Out", description: "Final closing of a position" },
+} as const;
+
+export type AdjustmentType = keyof typeof ADJUSTMENT_TYPES;
+
+export const adjustmentTypes = Object.keys(ADJUSTMENT_TYPES) as AdjustmentType[];
+
 // Main trade schema
 export const insertTradeSchema = z.object({
   ticker: z.string().min(1).max(10),
@@ -60,6 +72,10 @@ export const insertTradeSchema = z.object({
   maxLoss: z.coerce.number().optional().nullable(),
   userId: z.string(),
   shared: z.boolean().default(false),
+  // Position tracking for rolls/adjustments
+  positionId: z.string().optional().nullable(),           // Groups related trades (same underlying position)
+  adjustmentType: z.enum(adjustmentTypes as [AdjustmentType, ...AdjustmentType[]]).default("OPEN"),
+  parentTradeId: z.string().optional().nullable(),        // Links to the trade being rolled/adjusted
 });
 
 export type InsertTrade = z.infer<typeof insertTradeSchema>;
@@ -77,6 +93,10 @@ export interface Trade extends InsertTrade {
   missedPnl: number | null;             // Difference: theoretical value - actual exit
   // Edit tracking
   editedAt: string | null;              // Timestamp of last edit
+  // Position tracking (computed from positionId links)
+  positionId: string | null;            // UUID grouping related trades
+  adjustmentType: AdjustmentType;       // OPEN, ROLL, ADJUST, CLOSE_OUT
+  parentTradeId: string | null;         // Links to parent trade in position chain
 }
 
 // Comment schema
