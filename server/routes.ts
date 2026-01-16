@@ -1,16 +1,103 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertTradeSchema, insertCommentSchema, type FeedFilter } from "@shared/schema";
+import { insertTradeSchema, insertCommentSchema, loginSchema, registerSchema, type FeedFilter } from "@shared/schema";
 import { getStockQuote, getMultipleQuotes } from "./alpha-vantage";
+import bcrypt from "bcrypt";
+
+// Middleware to check authentication
+function requireAuth(req: any, res: any, next: any) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  next();
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Get current user (for demo, returns guest user)
+  
+  // ============ AUTHENTICATION ROUTES ============
+  
+  // Register new user
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const data = registerSchema.parse(req.body);
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(data.username);
+      if (existingUser) {
+        return res.status(400).json({ error: "Username already taken" });
+      }
+      
+      // Hash password
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+      
+      // Create user
+      const user = await storage.createUser({
+        username: data.username,
+        displayName: data.displayName,
+        password: hashedPassword,
+        avatarUrl: undefined,
+      });
+      
+      // Set session
+      req.session.userId = user.id;
+      
+      res.status(201).json(user);
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      res.status(400).json({ error: error.message || "Registration failed" });
+    }
+  });
+  
+  // Login
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const data = loginSchema.parse(req.body);
+      
+      // Get user with password
+      const userWithPassword = await storage.getUserWithPassword(data.username);
+      if (!userWithPassword) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+      
+      // Verify password
+      const isValid = await bcrypt.compare(data.password, userWithPassword.password);
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+      
+      // Set session
+      req.session.userId = userWithPassword.id;
+      
+      // Return user without password
+      const { password, ...user } = userWithPassword;
+      res.json(user);
+    } catch (error: any) {
+      console.error("Login error:", error);
+      res.status(400).json({ error: error.message || "Login failed" });
+    }
+  });
+  
+  // Logout
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+  
+  // Get current authenticated user
   app.get("/api/users/me", async (req, res) => {
-    const user = await storage.getUser("guest");
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    
+    const user = await storage.getUser(req.session.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -37,9 +124,9 @@ export async function registerRoutes(
   });
 
   // Get current user's trades (for My Trades tab)
-  app.get("/api/trades/mine", async (req, res) => {
+  app.get("/api/trades/mine", requireAuth, async (req, res) => {
     const filter = (req.query.filter as FeedFilter) || "all";
-    const trades = await storage.getUserTrades("guest", filter);
+    const trades = await storage.getUserTrades(req.session.userId!, filter);
     res.json(trades);
   });
 
@@ -60,11 +147,11 @@ export async function registerRoutes(
   });
 
   // Create new trade
-  app.post("/api/trades", async (req, res) => {
+  app.post("/api/trades", requireAuth, async (req, res) => {
     try {
       const data = insertTradeSchema.parse({
         ...req.body,
-        userId: "guest", // For demo, use guest user
+        userId: req.session.userId!,
       });
       
       // Normalize exitDate - treat empty string as null
@@ -84,7 +171,7 @@ export async function registerRoutes(
   });
 
   // Update existing trade
-  app.put("/api/trades/:id", async (req, res) => {
+  app.put("/api/trades/:id", requireAuth, async (req, res) => {
     try {
       const tradeId = req.params.id;
       const trade = await storage.getTrade(tradeId);
@@ -94,7 +181,7 @@ export async function registerRoutes(
       }
       
       // Only allow owner to edit
-      if (trade.userId !== "guest") {
+      if (trade.userId !== req.session.userId) {
         return res.status(403).json({ error: "Not authorized to edit this trade" });
       }
       
@@ -113,8 +200,10 @@ export async function registerRoutes(
       let pnlPercent: number | null = null;
       
       if (data.exitPrice !== undefined && data.exitPrice !== null && data.status === "CLOSED") {
-        const cost = data.entryPrice * data.quantity * 100;
-        const proceeds = data.exitPrice * data.quantity * 100;
+        // Use multiplier of 1 for stocks, 100 for options
+        const multiplier = data.strategy === "STOCK" ? 1 : 100;
+        const cost = data.entryPrice * data.quantity * multiplier;
+        const proceeds = data.exitPrice * data.quantity * multiplier;
         pnl = proceeds - cost;
         pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
       }
@@ -139,14 +228,14 @@ export async function registerRoutes(
   });
 
   // Toggle share on trade
-  app.post("/api/trades/:id/share", async (req, res) => {
+  app.post("/api/trades/:id/share", requireAuth, async (req, res) => {
     const tradeId = req.params.id;
     const trade = await storage.getTrade(tradeId);
     if (!trade) {
       return res.status(404).json({ error: "Trade not found" });
     }
     // Only allow owner to toggle share
-    if (trade.userId !== "guest") {
+    if (trade.userId !== req.session.userId) {
       return res.status(403).json({ error: "Not authorized" });
     }
     const shared = await storage.toggleShare(tradeId);
@@ -154,9 +243,9 @@ export async function registerRoutes(
   });
 
   // Toggle like on trade
-  app.post("/api/trades/:id/like", async (req, res) => {
+  app.post("/api/trades/:id/like", requireAuth, async (req, res) => {
     const tradeId = req.params.id;
-    const userId = "guest"; // For demo
+    const userId = req.session.userId!;
     
     const trade = await storage.getTrade(tradeId);
     if (!trade) {
@@ -180,7 +269,7 @@ export async function registerRoutes(
   });
 
   // Create comment on trade
-  app.post("/api/trades/:id/comments", async (req, res) => {
+  app.post("/api/trades/:id/comments", requireAuth, async (req, res) => {
     try {
       const tradeId = req.params.id;
       const trade = await storage.getTrade(tradeId);
@@ -190,7 +279,7 @@ export async function registerRoutes(
 
       const data = insertCommentSchema.parse({
         tradeId,
-        userId: "guest", // For demo
+        userId: req.session.userId!,
         content: req.body.content,
       });
 
@@ -291,8 +380,8 @@ export async function registerRoutes(
   });
 
   // Get user's open positions (for roll/adjustment dropdown)
-  app.get("/api/positions/open", async (req, res) => {
-    const positions = await storage.getUserOpenPositions("guest");
+  app.get("/api/positions/open", requireAuth, async (req, res) => {
+    const positions = await storage.getUserOpenPositions(req.session.userId!);
     res.json(positions);
   });
 
@@ -303,7 +392,7 @@ export async function registerRoutes(
   });
 
   // Create a roll trade (closes parent and opens new)
-  app.post("/api/trades/:id/roll", async (req, res) => {
+  app.post("/api/trades/:id/roll", requireAuth, async (req, res) => {
     try {
       const parentTradeId = req.params.id;
       const parentTrade = await storage.getTrade(parentTradeId);
@@ -312,7 +401,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Parent trade not found" });
       }
       
-      if (parentTrade.userId !== "guest") {
+      if (parentTrade.userId !== req.session.userId) {
         return res.status(403).json({ error: "Not authorized to roll this trade" });
       }
       
@@ -332,8 +421,9 @@ export async function registerRoutes(
       const positionId = parentTrade.positionId || `pos-${parentTrade.ticker.toLowerCase()}-${Date.now()}`;
 
       // Calculate P&L for the closing parent trade using provided exit price
-      const cost = parentTrade.entryPrice * parentTrade.quantity * 100;
-      const proceeds = parentExitPrice * parentTrade.quantity * 100;
+      const multiplier = parentTrade.strategy === "STOCK" ? 1 : 100;
+      const cost = parentTrade.entryPrice * parentTrade.quantity * multiplier;
+      const proceeds = parentExitPrice * parentTrade.quantity * multiplier;
       const pnl = proceeds - cost;
       const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
 
@@ -353,7 +443,7 @@ export async function registerRoutes(
       // Create the new rolled trade, inheriting shared status from parent
       const data = insertTradeSchema.parse({
         ...req.body,
-        userId: "guest",
+        userId: req.session.userId!,
         adjustmentType: "ROLL",
         positionId: positionId,
         parentTradeId: parentTradeId,

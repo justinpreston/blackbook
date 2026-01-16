@@ -203,7 +203,7 @@ export function RollTradeForm({ open, onOpenChange, onSubmit, isSubmitting, pare
                   name="quantity"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contracts</FormLabel>
+                      <FormLabel>{parentTrade.strategy === "STOCK" ? "Shares" : "Contracts"}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"

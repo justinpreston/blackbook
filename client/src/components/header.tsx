@@ -1,6 +1,12 @@
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/theme-provider";
-import { Moon, Sun, TrendingUp, Plus } from "lucide-react";
+import { Moon, Sun, TrendingUp, Plus, LogOut } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { type User } from "@shared/schema";
+import { queryClient } from "@/lib/queryClient";
 
 interface HeaderProps {
   onNewTrade: () => void;
@@ -8,6 +14,23 @@ interface HeaderProps {
 
 export function Header({ onNewTrade }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
+  const [, setLocation] = useLocation();
+  const { data: currentUser } = useQuery<User>({
+    queryKey: ["/api/users/me"],
+  });
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      queryClient.clear();
+      setLocation("/auth");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -40,6 +63,34 @@ export function Header({ onNewTrade }: HeaderProps) {
             <span className="hidden sm:inline">New Trade</span>
             <span className="sm:hidden">Add</span>
           </Button>
+          
+          {currentUser && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={currentUser.avatarUrl} alt={currentUser.displayName} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      {currentUser.displayName.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium">{currentUser.displayName}</p>
+                    <p className="text-xs text-muted-foreground">@{currentUser.username}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
     </header>

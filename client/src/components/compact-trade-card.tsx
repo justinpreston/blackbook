@@ -42,13 +42,17 @@ export function CompactTradeCard({
 }: CompactTradeCardProps) {
   const isLiked = trade.likes.includes(currentUserId);
   
+  // Helper to determine if this is a stock trade
+  const isStockTrade = trade.strategy === "STOCK" || trade.legs.every(leg => leg.type === "STOCK");
+  const multiplier = isStockTrade ? 1 : 100; // Stocks: 1 share per unit, Options: 100 shares per contract
+  
   // Calculate live P&L for open trades
   let displayPnl = trade.pnl;
   let displayPnlPercent = trade.pnlPercent;
   
   if (trade.status === "OPEN" && currentQuote && trade.entryPrice > 0) {
-    const currentValue = currentQuote.price * trade.quantity * 100; // Options are 100 shares per contract
-    const entryValue = trade.entryPrice * trade.quantity * 100;
+    const currentValue = currentQuote.price * trade.quantity * multiplier;
+    const entryValue = trade.entryPrice * trade.quantity * multiplier;
     displayPnl = currentValue - entryValue;
     displayPnlPercent = ((currentQuote.price - trade.entryPrice) / trade.entryPrice) * 100;
   }
@@ -179,7 +183,7 @@ export function CompactTradeCard({
         </div>
 
         <div className="text-xs text-muted-foreground mb-3">
-          {trade.quantity} {trade.quantity === 1 ? "contract" : "contracts"} @ ${trade.entryPrice.toFixed(2)}
+          {trade.quantity} {trade.quantity === 1 ? (isStockTrade ? "share" : "contract") : (isStockTrade ? "shares" : "contracts")} @ ${trade.entryPrice.toFixed(2)}
         </div>
 
         {trade.status === "CLOSED" && trade.missedPnl !== null && (

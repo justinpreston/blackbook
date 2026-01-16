@@ -24,6 +24,9 @@ export function TradeCard({ trade, user, currentUserId, onLike, onComment }: Tra
   const hasMultipleLegs = trade.legs.length > 1;
   const isLiked = trade.likes.includes(currentUserId);
   
+  // Helper to determine if this is a stock trade
+  const isStockTrade = trade.strategy === "STOCK" || trade.legs.every(leg => leg.type === "STOCK");
+  
   const isProfitable = trade.pnl !== null && trade.pnl > 0;
   const isLoss = trade.pnl !== null && trade.pnl < 0;
 
@@ -95,7 +98,7 @@ export function TradeCard({ trade, user, currentUserId, onLike, onComment }: Tra
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              {trade.quantity} {trade.quantity === 1 ? "contract" : "contracts"} @ ${trade.entryPrice.toFixed(2)}
+              {trade.quantity} {trade.quantity === 1 ? (isStockTrade ? "share" : "contract") : (isStockTrade ? "shares" : "contracts")} @ ${trade.entryPrice.toFixed(2)}
             </p>
           </div>
 

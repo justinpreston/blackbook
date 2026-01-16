@@ -15,6 +15,7 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserWithPassword(username: string): Promise<(User & { password: string }) | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
 
@@ -47,11 +48,13 @@ export interface IStorage {
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
+  private passwords: Map<string, string>; // Store passwords separately for security
   private trades: Map<string, Trade>;
   private comments: Map<string, Comment>;
 
   constructor() {
     this.users = new Map();
+    this.passwords = new Map();
     this.trades = new Map();
     this.comments = new Map();
 
@@ -67,7 +70,11 @@ export class MemStorage implements IStorage {
       { id: "guest", username: "guest", displayName: "Guest Trader", avatarUrl: undefined },
     ];
 
-    demoUsers.forEach((u) => this.users.set(u.id, u));
+    demoUsers.forEach((u) => {
+      this.users.set(u.id, u);
+      // Set demo password for seed users (in production, these would be hashed)
+      this.passwords.set(u.id, "$2b$10$DemoHashedPassword"); // Demo hashed password
+    });
 
     // Demo trades for initial feed
     const demoTrades: Trade[] = [
@@ -288,10 +295,20 @@ export class MemStorage implements IStorage {
     return Array.from(this.users.values()).find((user) => user.username === username);
   }
 
+  async getUserWithPassword(username: string): Promise<(User & { password: string }) | undefined> {
+    const user = Array.from(this.users.values()).find((user) => user.username === username);
+    if (!user) return undefined;
+    const password = this.passwords.get(user.id);
+    if (!password) return undefined;
+    return { ...user, password };
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const { password, ...userWithoutPassword } = insertUser;
+    const user: User = { ...userWithoutPassword, id };
     this.users.set(id, user);
+    this.passwords.set(id, password); // Store password separately
     return user;
   }
 
@@ -348,8 +365,10 @@ export class MemStorage implements IStorage {
     let pnlPercent: number | null = null;
 
     if (insertTrade.exitPrice !== undefined && insertTrade.exitPrice !== null && insertTrade.status === "CLOSED") {
-      const cost = insertTrade.entryPrice * insertTrade.quantity * 100;
-      const proceeds = insertTrade.exitPrice * insertTrade.quantity * 100;
+      // Use multiplier of 1 for stocks, 100 for options
+      const multiplier = insertTrade.strategy === "STOCK" ? 1 : 100;
+      const cost = insertTrade.entryPrice * insertTrade.quantity * multiplier;
+      const proceeds = insertTrade.exitPrice * insertTrade.quantity * multiplier;
       pnl = proceeds - cost;
       pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
     }
@@ -509,7 +528,8 @@ export class MemStorage implements IStorage {
     
     // missedPnl = what we would have made - what we actually made
     // Positive = left money on table, Negative = good exit
-    const missedPnl = (expirationPnl - actualPnl) * trade.quantity * 100;
+    const multiplier = trade.strategy === "STOCK" ? 1 : 100;
+    const missedPnl = (expirationPnl - actualPnl) * trade.quantity * multiplier;
 
     const updated: Trade = {
       ...trade,

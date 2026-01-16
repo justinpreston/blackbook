@@ -291,7 +291,7 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting, editi
                 name="quantity"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contracts</FormLabel>
+                    <FormLabel>{selectedStrategy === "STOCK" ? "Shares" : "Contracts"}</FormLabel>
                     <FormControl>
                       <Input
                         type="number"

@@ -118,13 +118,38 @@ export const insertUserSchema = z.object({
   username: z.string().min(1).max(50),
   displayName: z.string().min(1).max(100),
   avatarUrl: z.string().optional(),
+  password: z.string().min(6), // Hashed password
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
-export interface User extends InsertUser {
+export interface User {
   id: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string;
+  // password excluded from public User interface for security
 }
+
+// Auth schemas
+export const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export type LoginCredentials = z.infer<typeof loginSchema>;
+
+export const registerSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters").max(50),
+  displayName: z.string().min(1, "Display name is required").max(100),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+export type RegisterData = z.infer<typeof registerSchema>;
 
 // Stats for dashboard
 export interface UserStats {
