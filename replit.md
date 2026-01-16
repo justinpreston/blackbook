@@ -46,6 +46,28 @@ The frontend follows a component-based architecture with:
   - Resets expiration tracking fields on edit
 - **API Endpoint**: PUT `/api/trades/:id` updates trade and sets editedAt timestamp
 
+### Position Tracking & Rolling Feature
+- **Purpose**: Track positions across multiple trades when rolling to different strikes/expirations
+- **Schema Fields**: 
+  - `positionId` (nullable string): Unique ID linking trades in the same position chain
+  - `adjustmentType` (nullable string): "OPEN" | "ROLL" | "ADJUST" | "CLOSE_OUT"
+  - `parentTradeId` (nullable string): Links rolled trade to its parent
+- **ADJUSTMENT_TYPES Constant**: Metadata for each adjustment type (name, description)
+- **Roll Workflow**:
+  1. User clicks purple Roll button on open trade
+  2. RollTradeForm opens with dual-pane UI (closing/opening sections)
+  3. User fills exit price for closing position and entry details for new position
+  4. API closes parent trade with P&L calculation, creates new trade linked via positionId
+- **UI Display**:
+  - Purple Roll button (RotateCcw icon) visible on owner's open trades
+  - Adjustment badges (Roll/Adjust/Close Out) displayed on trade cards for non-OPEN types
+  - Rolled trades inherit shared status from parent
+- **API Endpoints**:
+  - POST `/api/trades/:id/roll` - Closes parent and creates new rolled trade
+  - GET `/api/positions/open` - List user's open positions
+  - GET `/api/positions/:positionId/trades` - Get all trades in a position chain
+- **Storage Methods**: `getUserOpenPositions`, `getPositionTrades`
+
 ### Exit Date Validation
 - **Requirement**: Exit date is required when closing options trades (all strategies except STOCK)
 - **Frontend**: Zod refine validation + dynamic form label showing "(required)" vs "(optional)"

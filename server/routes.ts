@@ -320,36 +320,51 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Can only roll open trades" });
       }
 
+      // Validate required roll fields
+      if (req.body.parentExitPrice === undefined || req.body.parentExitPrice === "") {
+        return res.status(400).json({ error: "Parent exit price is required for rolling" });
+      }
+
+      const parentExitPrice = parseFloat(req.body.parentExitPrice);
+      const parentExitDate = req.body.parentExitDate || new Date().toISOString().split('T')[0];
+
+      // Ensure positionId exists - create one if parent doesn't have it
+      const positionId = parentTrade.positionId || `pos-${parentTrade.ticker.toLowerCase()}-${Date.now()}`;
+
+      // Calculate P&L for the closing parent trade using provided exit price
+      const cost = parentTrade.entryPrice * parentTrade.quantity * 100;
+      const proceeds = parentExitPrice * parentTrade.quantity * 100;
+      const pnl = proceeds - cost;
+      const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
+
+      // Close the parent trade first with the correct P&L
+      await storage.updateTrade(parentTradeId, {
+        status: "CLOSED",
+        exitPrice: parentExitPrice,
+        exitDate: parentExitDate,
+        pnl,
+        pnlPercent,
+        positionId, // Ensure parent has positionId if it was missing
+        expirationStockPrice: null,
+        theoreticalExitValue: null,
+        missedPnl: null,
+      });
+
+      // Create the new rolled trade, inheriting shared status from parent
       const data = insertTradeSchema.parse({
         ...req.body,
         userId: "guest",
         adjustmentType: "ROLL",
-        positionId: parentTrade.positionId,
+        positionId: positionId,
         parentTradeId: parentTradeId,
+        shared: parentTrade.shared, // Inherit shared status
       });
       
-      // Normalize exitDate
+      // Normalize exitDate for new trade
       const normalizedExitDate = data.exitDate && data.exitDate.trim() !== "" ? data.exitDate : null;
       
       // Create the new rolled trade
       const newTrade = await storage.createTrade({ ...data, exitDate: normalizedExitDate });
-      
-      // Close the parent trade if exitPrice is provided in the request
-      if (req.body.parentExitPrice !== undefined) {
-        const exitPrice = parseFloat(req.body.parentExitPrice);
-        const cost = parentTrade.entryPrice * parentTrade.quantity * 100;
-        const proceeds = exitPrice * parentTrade.quantity * 100;
-        const pnl = proceeds - cost;
-        const pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
-        
-        await storage.updateTrade(parentTradeId, {
-          status: "CLOSED",
-          exitPrice,
-          exitDate: req.body.parentExitDate || new Date().toISOString().split('T')[0],
-          pnl,
-          pnlPercent,
-        });
-      }
       
       res.status(201).json(newTrade);
     } catch (error: any) {
