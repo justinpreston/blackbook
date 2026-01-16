@@ -45,7 +45,19 @@ const formSchema = insertTradeSchema.omit({ userId: true }).extend({
     premium: z.coerce.number().optional().or(z.literal("")),
     quantity: z.coerce.number().int().positive(),
   })).min(1),
-});
+}).refine(
+  (data) => {
+    // Require exit date for closed options trades (not stocks)
+    if (data.status === "CLOSED" && data.strategy !== "STOCK") {
+      return data.exitDate && data.exitDate.trim() !== "";
+    }
+    return true;
+  },
+  {
+    message: "Exit date is required for closed options trades",
+    path: ["exitDate"],
+  }
+);
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -335,17 +347,19 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting, editi
 
               <FormField
                 control={form.control}
-                name="exitPrice"
+                name="exitDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Exit Price (optional)</FormLabel>
+                    <FormLabel>
+                      Exit Date {form.watch("status") === "CLOSED" && selectedStrategy !== "STOCK" 
+                        ? "(required)" 
+                        : "(optional)"}
+                    </FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
+                        type="date"
                         {...field}
-                        data-testid="input-exit-price"
+                        data-testid="input-exit-date"
                       />
                     </FormControl>
                     <FormMessage />
@@ -353,6 +367,26 @@ export function NewTradeForm({ open, onOpenChange, onSubmit, isSubmitting, editi
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="exitPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Exit Price (optional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      {...field}
+                      data-testid="input-exit-price"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">

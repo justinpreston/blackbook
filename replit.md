@@ -46,6 +46,12 @@ The frontend follows a component-based architecture with:
   - Resets expiration tracking fields on edit
 - **API Endpoint**: PUT `/api/trades/:id` updates trade and sets editedAt timestamp
 
+### Exit Date Validation
+- **Requirement**: Exit date is required when closing options trades (all strategies except STOCK)
+- **Frontend**: Zod refine validation + dynamic form label showing "(required)" vs "(optional)"
+- **Backend**: Validation in POST/PUT routes with empty string normalization to null
+- **UX**: Form shows validation error if exit date missing when closing options trade
+
 ### Expiration Tracking System
 - **Purpose**: Analyze if closing early was the right decision
 - **Schema Fields**: `expirationStockPrice`, `theoreticalExitValue`, `missedPnl` (all nullable on Trade)

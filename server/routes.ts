@@ -66,7 +66,16 @@ export async function registerRoutes(
         ...req.body,
         userId: "guest", // For demo, use guest user
       });
-      const trade = await storage.createTrade(data);
+      
+      // Normalize exitDate - treat empty string as null
+      const normalizedExitDate = data.exitDate && data.exitDate.trim() !== "" ? data.exitDate : null;
+      
+      // Require exit date for closed options trades (not stocks)
+      if (data.status === "CLOSED" && data.strategy !== "STOCK" && !normalizedExitDate) {
+        return res.status(400).json({ error: "Exit date is required for closed options trades" });
+      }
+      
+      const trade = await storage.createTrade({ ...data, exitDate: normalizedExitDate });
       res.status(201).json(trade);
     } catch (error: any) {
       console.error("Trade creation error:", error);
@@ -91,6 +100,14 @@ export async function registerRoutes(
       
       const data = insertTradeSchema.omit({ userId: true }).parse(req.body);
       
+      // Normalize exitDate - treat empty string as null
+      const normalizedExitDate = data.exitDate && data.exitDate.trim() !== "" ? data.exitDate : null;
+      
+      // Require exit date for closed options trades (not stocks)
+      if (data.status === "CLOSED" && data.strategy !== "STOCK" && !normalizedExitDate) {
+        return res.status(400).json({ error: "Exit date is required for closed options trades" });
+      }
+      
       // Calculate P&L for closed trades
       let pnl: number | null = null;
       let pnlPercent: number | null = null;
@@ -104,6 +121,7 @@ export async function registerRoutes(
       
       const updatedTrade = await storage.updateTrade(tradeId, {
         ...data,
+        exitDate: normalizedExitDate,
         pnl,
         pnlPercent,
         editedAt: new Date().toISOString(),
