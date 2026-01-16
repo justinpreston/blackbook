@@ -7,6 +7,7 @@ import {
   type InsertComment,
   type UserStats,
   type FeedFilter,
+  type AdjustmentType,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -28,6 +29,10 @@ export interface IStorage {
   toggleShare(tradeId: string): Promise<boolean>;
   getExpiredTrades(): Promise<Trade[]>;
   updateExpirationData(tradeId: string, stockPrice: number, theoreticalValue: number): Promise<Trade | undefined>;
+  
+  // Position tracking
+  getPositionTrades(positionId: string): Promise<Trade[]>;
+  getUserOpenPositions(userId: string): Promise<Trade[]>;
 
   // Likes
   toggleLike(tradeId: string, userId: string): Promise<boolean>;
@@ -94,6 +99,9 @@ export class MemStorage implements IStorage {
         theoreticalExitValue: null,
         missedPnl: null,
         editedAt: null,
+        positionId: "pos-aapl-1",
+        adjustmentType: "OPEN",
+        parentTradeId: null,
       },
       {
         id: "trade2",
@@ -125,6 +133,9 @@ export class MemStorage implements IStorage {
         theoreticalExitValue: null,
         missedPnl: null,
         editedAt: null,
+        positionId: "pos-tsla-1",
+        adjustmentType: "OPEN",
+        parentTradeId: null,
       },
       {
         id: "trade3",
@@ -153,6 +164,9 @@ export class MemStorage implements IStorage {
         theoreticalExitValue: 0,
         missedPnl: -630, // Exited at $2.10, would be worthless - saved $630
         editedAt: null,
+        positionId: "pos-spy-1",
+        adjustmentType: "OPEN",
+        parentTradeId: null,
       },
       {
         id: "trade4",
@@ -181,6 +195,9 @@ export class MemStorage implements IStorage {
         theoreticalExitValue: null,
         missedPnl: null,
         editedAt: null,
+        positionId: "pos-nvda-1",
+        adjustmentType: "OPEN",
+        parentTradeId: null,
       },
       {
         id: "trade5",
@@ -210,6 +227,9 @@ export class MemStorage implements IStorage {
         theoreticalExitValue: null,
         missedPnl: null,
         editedAt: null,
+        positionId: "pos-amd-1",
+        adjustmentType: "OPEN",
+        parentTradeId: null,
       },
       {
         id: "trade6",
@@ -238,6 +258,9 @@ export class MemStorage implements IStorage {
         theoreticalExitValue: 20, // META 500 call at expiry with stock at 520 = $20 intrinsic
         missedPnl: -400, // Exited at $22, would be $20 at expiry - saved $400 by exiting early
         editedAt: null,
+        positionId: "pos-meta-1",
+        adjustmentType: "OPEN",
+        parentTradeId: null,
       },
     ];
 
@@ -331,6 +354,15 @@ export class MemStorage implements IStorage {
       pnlPercent = cost > 0 ? (pnl / cost) * 100 : 0;
     }
 
+    // Generate positionId for new positions, inherit for adjustments
+    let positionId = insertTrade.positionId;
+    const adjustmentType = insertTrade.adjustmentType || "OPEN";
+    
+    // If this is a new position (OPEN type), generate a positionId
+    if (adjustmentType === "OPEN" && !positionId) {
+      positionId = randomUUID();
+    }
+
     const trade: Trade = {
       ...insertTrade,
       id,
@@ -343,6 +375,9 @@ export class MemStorage implements IStorage {
       theoreticalExitValue: null,
       missedPnl: null,
       editedAt: null,
+      positionId: positionId || null,
+      adjustmentType,
+      parentTradeId: insertTrade.parentTradeId || null,
     };
 
     this.trades.set(id, trade);
@@ -381,6 +416,42 @@ export class MemStorage implements IStorage {
       });
       return hasExpiredOption;
     });
+  }
+
+  // Position tracking methods
+  async getPositionTrades(positionId: string): Promise<Trade[]> {
+    return Array.from(this.trades.values())
+      .filter((t) => t.positionId === positionId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+
+  async getUserOpenPositions(userId: string): Promise<Trade[]> {
+    // Get trades that are OPEN or have adjustmentType OPEN (the original opening trades)
+    // This helps when creating a roll/adjustment - we want to show positions that can be adjusted
+    const userTrades = Array.from(this.trades.values()).filter((t) => t.userId === userId);
+    
+    // Group by positionId and check if there's still an open trade
+    const positionMap = new Map<string, Trade[]>();
+    for (const trade of userTrades) {
+      if (!trade.positionId) continue;
+      if (!positionMap.has(trade.positionId)) {
+        positionMap.set(trade.positionId, []);
+      }
+      positionMap.get(trade.positionId)!.push(trade);
+    }
+    
+    // Return the most recent OPEN trade for each position
+    const openPositions: Trade[] = [];
+    positionMap.forEach((trades) => {
+      const latestOpen = trades
+        .filter((t) => t.status === "OPEN")
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      if (latestOpen) {
+        openPositions.push(latestOpen);
+      }
+    });
+    
+    return openPositions;
   }
 
   async updateExpirationData(tradeId: string, stockPrice: number, theoreticalValue: number): Promise<Trade | undefined> {
